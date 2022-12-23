@@ -10,7 +10,7 @@ def generate_memory_table(start,end):
     for i in range(length):
         row_indexes.append(hex((int(start/16)+i)*16)[2:].upper())
         for j in range(16):
-            memory_dictionary[hex(j)[2:].upper()].append("0")
+            memory_dictionary[hex(j)[2:].upper()].append("00")
     memory_table = pd.DataFrame(data=memory_dictionary)
     memory_table.index = row_indexes
     return memory_table

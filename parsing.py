@@ -1,4 +1,4 @@
-import pandas as pd
+import math
 def Create_External_Symbol_Table(HTERECORDPATH,PROGORDER,STARTING_ADDRESS):
     STAB_LIST = [{} for i in range(len(PROGORDER))]
     with open(HTERECORDPATH) as f:
@@ -30,25 +30,24 @@ def Create_External_Symbol_Table(HTERECORDPATH,PROGORDER,STARTING_ADDRESS):
                 prog_index = PROGORDER.index(PROG_NAME)
                 STAB_LIST[prog_index] = LOCAL_SYMTAB
                 LOCAL_SYMTAB = {}
+    ESTAB = {}
     for STAB in STAB_LIST:
         for SYMBOL in STAB.keys():
-            if(SYMBOL=="LENGTH"):
-                continue;
-            STAB[SYMBOL] = hex(int(STAB[SYMBOL],16)+STARTING_ADDRESS)[2:]
-
+            if(SYMBOL!="LENGTH"):
+                STAB[SYMBOL] = hex(int(STAB[SYMBOL],16)+STARTING_ADDRESS)[2:]
+            ESTAB[SYMBOL] = STAB[SYMBOL].upper()
         if(len(STAB.keys())!=0):
             STARTING_ADDRESS = STARTING_ADDRESS+int(STAB["LENGTH"],16)
+    return ESTAB
 
-    return STAB_LIST
-def Apply_T_RECORDS(HTERECORDPATH,STAB_LIST,PROGORDER,MEMORY_TABLE):
+def Apply_T_RECORDS(HTERECORDPATH,ESTAB,MEMORY_TABLE):
     with open(HTERECORDPATH) as f:
         PROG_STARTING_ADDRESS=0
         for line in f:
             if(line[0]=="H"): 
                 prog_name_end = line.find("0")
                 PROG_NAME = line[1:prog_name_end].upper().replace("X","")
-                PROG_INDEX = PROGORDER.index(PROG_NAME)
-                PROG_STARTING_ADDRESS = int(STAB_LIST[PROG_INDEX][PROG_NAME],16)
+                PROG_STARTING_ADDRESS = int(ESTAB[PROG_NAME],16)
                 
             if(line[0]=="T"):
                 T_RELATIVE_STARTING_ADDRESS = int(line[1:7],16)
@@ -62,6 +61,52 @@ def Apply_T_RECORDS(HTERECORDPATH,STAB_LIST,PROGORDER,MEMORY_TABLE):
                     row = hex(CURRENT_ADDRESS-offset)[2:].upper()
                     MEMORY_TABLE.at[row,column]=byte
                     CURRENT_ADDRESS+=1
+            if(line[0]=="M"):
+                M_RELATIVE_ADDRESS = int(line[1:7],16)
+                M_RECORD_SIZE = int(line[7:9],16)
+                M_ABSOLUTE_STARTING_ADDRESS = M_RELATIVE_ADDRESS+PROG_STARTING_ADDRESS
+                M_RECORD_END = M_ABSOLUTE_STARTING_ADDRESS + math.ceil(M_RECORD_SIZE/2)
+                M_RECORD_SIGN = line[9:10]
+                M_RECORD_VALUE = int(ESTAB[line[10:-1].upper()],16)
+                BEFORE_VALUE=""
+                CURRENT_ADDRESS=M_ABSOLUTE_STARTING_ADDRESS
+                for i in range(M_RECORD_END-M_ABSOLUTE_STARTING_ADDRESS):
+                    offset = (CURRENT_ADDRESS+i)%16
+                    column = hex(offset)[2:].upper()
+                    row = hex(CURRENT_ADDRESS+i-offset)[2:].upper()
+                    byte = MEMORY_TABLE.at[row,column]
+                    BEFORE_VALUE+=byte
+                BEFORE_VALUE_CHANGED_PART = BEFORE_VALUE[len(BEFORE_VALUE)-M_RECORD_SIZE:]
+                BEFORE_VALUE_UNCHANGED_PART = BEFORE_VALUE[0:len(BEFORE_VALUE)-M_RECORD_SIZE]
+                BEFORE_VALUE_CHANGED_PART = int(BEFORE_VALUE_CHANGED_PART,16)
+                if(M_RECORD_SIGN=="+"):
+                    BEFORE_VALUE_CHANGED_PART+= M_RECORD_VALUE
+                elif(M_RECORD_SIGN=="-"):
+                    BEFORE_VALUE_CHANGED_PART-=M_RECORD_VALUE
+                if(BEFORE_VALUE_CHANGED_PART>0):
+                    BEFORE_VALUE_CHANGED_PART = hex(BEFORE_VALUE_CHANGED_PART)[2:].rjust(M_RECORD_SIZE,"0")
+                else:
+                    BEFORE_VALUE_CHANGED_PART = hex(BEFORE_VALUE_CHANGED_PART & (2**(M_RECORD_SIZE*4)-1))[2:]
+                if(len(BEFORE_VALUE_UNCHANGED_PART)>0):
+                    AFTER_VALUE = BEFORE_VALUE_CHANGED_PART.rjust(6,BEFORE_VALUE_UNCHANGED_PART)
+                else:
+                    AFTER_VALUE = BEFORE_VALUE_CHANGED_PART
+                print(AFTER_VALUE)
+                CURRENT_ADDRESS=M_ABSOLUTE_STARTING_ADDRESS
+                j = 0
+                for i in range(M_RECORD_END-M_ABSOLUTE_STARTING_ADDRESS):
+                    byte = AFTER_VALUE[j:j+2]
+                    offset = (CURRENT_ADDRESS+i)%16
+                    column = hex(offset)[2:].upper()
+                    row = hex(CURRENT_ADDRESS+i-offset)[2:].upper()
+                    MEMORY_TABLE.at[row,column]=byte.upper()
+                    j+=2
+            
+            
+
+                
+
+                
         return MEMORY_TABLE
 
                     
