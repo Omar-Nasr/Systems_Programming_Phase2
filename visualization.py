@@ -1,4 +1,5 @@
 import pandas as pd
+import pandasgui 
 def generate_memory_table(start,end):
  
 
@@ -14,5 +15,6 @@ def generate_memory_table(start,end):
     memory_table = pd.DataFrame(data=memory_dictionary)
     memory_table.index = row_indexes
     return memory_table
-
+def display_resulting_table(memory_table):
+    pandasgui.show(memory_table)
 

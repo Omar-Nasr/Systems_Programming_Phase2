@@ -1,4 +1,5 @@
 import math
+import pandas as pd
 def Create_External_Symbol_Table(HTERECORDPATH,PROGORDER,STARTING_ADDRESS):
     STAB_LIST = [{} for i in range(len(PROGORDER))]
     with open(HTERECORDPATH) as f:
@@ -35,12 +36,13 @@ def Create_External_Symbol_Table(HTERECORDPATH,PROGORDER,STARTING_ADDRESS):
         for SYMBOL in STAB.keys():
             if(SYMBOL!="LENGTH"):
                 STAB[SYMBOL] = hex(int(STAB[SYMBOL],16)+STARTING_ADDRESS)[2:]
-            ESTAB[SYMBOL] = STAB[SYMBOL].upper()
+                ESTAB[SYMBOL] = STAB[SYMBOL].upper()
         if(len(STAB.keys())!=0):
             STARTING_ADDRESS = STARTING_ADDRESS+int(STAB["LENGTH"],16)
+        ESTAB["END"]=STARTING_ADDRESS
     return ESTAB
 
-def Apply_T_RECORDS(HTERECORDPATH,ESTAB,MEMORY_TABLE):
+def Link_And_Load(HTERECORDPATH,ESTAB,MEMORY_TABLE):
     with open(HTERECORDPATH) as f:
         PROG_STARTING_ADDRESS=0
         for line in f:
@@ -91,7 +93,6 @@ def Apply_T_RECORDS(HTERECORDPATH,ESTAB,MEMORY_TABLE):
                     AFTER_VALUE = BEFORE_VALUE_CHANGED_PART.rjust(6,BEFORE_VALUE_UNCHANGED_PART)
                 else:
                     AFTER_VALUE = BEFORE_VALUE_CHANGED_PART
-                print(AFTER_VALUE)
                 CURRENT_ADDRESS=M_ABSOLUTE_STARTING_ADDRESS
                 j = 0
                 for i in range(M_RECORD_END-M_ABSOLUTE_STARTING_ADDRESS):
@@ -108,8 +109,48 @@ def Apply_T_RECORDS(HTERECORDPATH,ESTAB,MEMORY_TABLE):
 
                 
         return MEMORY_TABLE
+def ABSOLUTE_LOAD(HTERECORDPATH):   
+    with open(HTERECORDPATH) as f:
+        memory_table= pd.DataFrame()
+        for line in f:
+            # print(line)
+            if line[0]=='T':
+                T_RELATIVE_STARTING_ADDRESS = int(line[1:7],16)
+                T_RECORD = line[9:].replace("\n","")
+                CURRENT_ADDRESS = T_RELATIVE_STARTING_ADDRESS
+                for i in range(0,len(T_RECORD),2):
+                    byte = T_RECORD[i:i+2]
+                    offset = CURRENT_ADDRESS%16
+                    column = hex(offset)[2:].upper()
+                    row = hex(CURRENT_ADDRESS-offset)[2:].upper()
+                    memory_table.at[row,column]=byte
+                    CURRENT_ADDRESS+=1
 
-                    
+
+            elif line[0]=='H':
+                prog_name_end = line.find("0")
+                PROG_START = line[prog_name_end:prog_name_end+6]
+                PROG_SIZE = line[prog_name_end+6:prog_name_end+12] 
+                length = int(int(PROG_SIZE,16))
+                prog_start_as_int = int(PROG_START,16)
+                prog_end = prog_start_as_int+length
+                actual_end = prog_end+(16-prog_end%16)
+                real_length = int((actual_end-prog_start_as_int)/16)            
+                memory_dictionary = {}
+                row_indexes = []
+                for i in range(16):
+                    memory_dictionary[hex(i)[2:].upper()]=[]
+                for i in range(real_length):
+                    row_indexes.append(hex((int(prog_start_as_int/16)+i)*16)[2:].upper())
+                    for j in range(16):
+                        memory_dictionary[hex(j)[2:].upper()].append("00")
+                memory_table = pd.DataFrame(data=memory_dictionary)
+                memory_table.index = row_indexes
+        return memory_table
+                # print(PROG_SIZE)
+                # print(int(PROG_SIZE,16)
+
+                        
 
                 
 
